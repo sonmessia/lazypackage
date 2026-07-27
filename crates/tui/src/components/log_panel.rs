@@ -48,14 +48,29 @@ impl Component for LogPanel {
             ratatui::text::Span::styled(msg, Style::default().fg(Theme::TEXT)),
         ];
 
+        let is_focused = state.active_panel == lazypackage_core::domain::ActivePanel::Logs;
+        let border_color = if is_focused {
+            Theme::BORDER_FOCUSED
+        } else {
+            Theme::BORDER_UNFOCUSED
+        };
+
+        let title_text = if is_focused {
+            " [4] 📜 Logs "
+        } else {
+            " 4: Logs "
+        };
+
         let para = Paragraph::new(ratatui::text::Line::from(spans)).block(
             Block::default()
                 .borders(Borders::ALL)
                 .title(ratatui::text::Span::styled(
-                    " 📜 Logs ",
-                    Style::default().fg(Theme::ACCENT).add_modifier(ratatui::style::Modifier::BOLD),
+                    title_text,
+                    Style::default()
+                        .fg(if is_focused { Theme::BORDER_FOCUSED } else { Theme::ACCENT })
+                        .add_modifier(ratatui::style::Modifier::BOLD),
                 ))
-                .border_style(Style::default().fg(Theme::BORDER_UNFOCUSED)),
+                .border_style(Style::default().fg(border_color)),
         );
         f.render_widget(para, area);
     }

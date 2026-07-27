@@ -38,9 +38,15 @@ impl Component for DetailsPane {
             Theme::BORDER_UNFOCUSED
         };
 
+        let title_text = if self.is_focused {
+            " [3] ℹ Package Details "
+        } else {
+            " 3: Package Details "
+        };
+
         let titles = vec![" ℹ Info ", " 🔗 Dependencies ", " 📄 Files "];
         let tabs = Tabs::new(titles)
-            .select(self.active_tab)
+            .select(state.details_tab)
             .style(Style::default().fg(Theme::TEXT_MUTED))
             .highlight_style(
                 Style::default()
@@ -52,8 +58,10 @@ impl Component for DetailsPane {
                 Block::default()
                     .borders(Borders::ALL)
                     .title(ratatui::text::Span::styled(
-                        " ℹ Package Details ",
-                        Style::default().fg(Theme::ACCENT).add_modifier(ratatui::style::Modifier::BOLD),
+                        title_text,
+                        Style::default()
+                            .fg(if self.is_focused { Theme::BORDER_FOCUSED } else { Theme::ACCENT })
+                            .add_modifier(ratatui::style::Modifier::BOLD),
                     ))
                     .border_style(Style::default().fg(border_color)),
             );

@@ -1,10 +1,15 @@
-use lazypackage_core::domain::{Package, PackageId, SearchScope};
+use lazypackage_core::domain::{ActivePanel, Package, PackageId, PackageStatus, SearchScope};
 use std::collections::HashSet;
 
 pub struct AppState {
     pub installed_packages: Vec<Package>,
     pub dnf_search_results: Vec<Package>,
     pub search_scope: SearchScope,
+    pub active_panel: ActivePanel,
+    pub sidebar_index: usize,
+    pub details_tab: usize,
+    pub details_scroll: u16,
+    pub log_scroll: u16,
     pub selected_package_index: Option<usize>,
     pub search_query: String,
     pub is_search_mode: bool,
@@ -21,6 +26,11 @@ impl Default for AppState {
             installed_packages: Vec::new(),
             dnf_search_results: Vec::new(),
             search_scope: SearchScope::Local,
+            active_panel: ActivePanel::PackageTable,
+            sidebar_index: 0,
+            details_tab: 0,
+            details_scroll: 0,
+            log_scroll: 0,
             selected_package_index: None,
             search_query: String::new(),
             is_search_mode: false,
@@ -47,21 +57,26 @@ impl AppState {
 
     pub fn filtered_packages(&self) -> Vec<&Package> {
         let source = self.active_packages();
-        if self.search_query.trim().is_empty() {
-            source.iter().collect()
-        } else {
-            let query = self.search_query.to_lowercase();
-            source
-                .iter()
-                .filter(|p| {
+        source
+            .iter()
+            .filter(|p| match self.current_category.as_str() {
+                "Installed" => p.status() == PackageStatus::Installed,
+                "Upgradable" => p.status() == PackageStatus::UpgradeAvailable,
+                _ => true,
+            })
+            .filter(|p| {
+                if self.search_query.trim().is_empty() {
+                    true
+                } else {
+                    let query = self.search_query.to_lowercase();
                     p.id.name.to_lowercase().contains(&query)
                         || p.summary.to_lowercase().contains(&query)
                         || p.repo.as_deref().unwrap_or("").to_lowercase().contains(&query)
                         || p.installed_version.as_deref().unwrap_or("").to_lowercase().contains(&query)
                         || p.available_version.as_deref().unwrap_or("").to_lowercase().contains(&query)
-                })
-                .collect()
-        }
+                }
+            })
+            .collect()
     }
 
     pub fn selected_package(&self) -> Option<&Package> {
@@ -158,5 +173,14 @@ mod tests {
         state.clamp_selection();
         assert_eq!(state.selected_package_index, None);
         assert!(state.selected_package().is_none());
+    }
+
+    #[test]
+    fn test_active_panel_navigation() {
+        let panel = ActivePanel::PackageTable;
+        assert_eq!(panel.next(), ActivePanel::Details);
+        assert_eq!(panel.next().next(), ActivePanel::Logs);
+        assert_eq!(panel.next().next().next(), ActivePanel::Sidebar);
+        assert_eq!(panel.prev(), ActivePanel::Sidebar);
     }
 }

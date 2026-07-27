@@ -97,10 +97,12 @@ impl Component for PackageTable {
 
         let total = state.active_packages().len();
 
+        let title_prefix = if self.is_focused { "[2] 📦 Packages" } else { "2: Packages" };
+
         let title_text = if state.search_query.is_empty() {
-            format!(" 📦 Packages [{}] ({}) ", scope_name, total)
+            format!(" {} [{}] ({}) ", title_prefix, scope_name, total)
         } else {
-            format!(" 📦 Packages [{}] ({}/{}) ", scope_name, filtered.len(), total)
+            format!(" {} [{}] ({}/{}) ", title_prefix, scope_name, filtered.len(), total)
         };
 
         let table = Table::new(

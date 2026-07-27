@@ -28,6 +28,40 @@ impl Default for SearchScope {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ActivePanel {
+    Sidebar,      // Panel 1
+    PackageTable, // Panel 2
+    Details,      // Panel 3
+    Logs,         // Panel 4
+}
+
+impl Default for ActivePanel {
+    fn default() -> Self {
+        Self::PackageTable
+    }
+}
+
+impl ActivePanel {
+    pub fn next(self) -> Self {
+        match self {
+            Self::Sidebar => Self::PackageTable,
+            Self::PackageTable => Self::Details,
+            Self::Details => Self::Logs,
+            Self::Logs => Self::Sidebar,
+        }
+    }
+
+    pub fn prev(self) -> Self {
+        match self {
+            Self::Sidebar => Self::Logs,
+            Self::PackageTable => Self::Sidebar,
+            Self::Details => Self::PackageTable,
+            Self::Logs => Self::Details,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Package {
     pub id: PackageId,

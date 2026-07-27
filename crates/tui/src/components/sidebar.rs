@@ -71,7 +71,9 @@ impl Component for Sidebar {
 
     fn update(&mut self, _action: &Action) {}
 
-    fn draw(&mut self, f: &mut Frame, area: Rect, _state: &AppState) {
+    fn draw(&mut self, f: &mut Frame, area: Rect, state: &AppState) {
+        self.state.select(Some(state.sidebar_index));
+
         let items: Vec<ListItem> = self
             .categories
             .iter()
@@ -92,13 +94,21 @@ impl Component for Sidebar {
             Theme::BORDER_UNFOCUSED
         };
 
+        let title_text = if self.is_focused {
+            " [1] 📁 Categories "
+        } else {
+            " 1: Categories "
+        };
+
         let list = List::new(items)
             .block(
                 Block::default()
                     .borders(Borders::ALL)
                     .title(ratatui::text::Span::styled(
-                        " 📁 Categories ",
-                        Style::default().fg(Theme::ACCENT).add_modifier(ratatui::style::Modifier::BOLD),
+                        title_text,
+                        Style::default()
+                            .fg(if self.is_focused { Theme::BORDER_FOCUSED } else { Theme::ACCENT })
+                            .add_modifier(ratatui::style::Modifier::BOLD),
                     ))
                     .border_style(Style::default().fg(border_color)),
             )

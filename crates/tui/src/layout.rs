@@ -4,7 +4,7 @@ use crate::components::{
 };
 use crate::state::AppState;
 use crate::theme::Theme;
-use lazypackage_core::domain::SearchScope;
+use lazypackage_core::domain::{ActivePanel, SearchScope};
 use ratatui::{
     layout::{Constraint, Direction, Layout},
     style::{Modifier, Style},
@@ -154,6 +154,10 @@ impl AppLayout {
             ])
             .split(chunks[1]);
 
+        self.sidebar.is_focused = state.active_panel == ActivePanel::Sidebar;
+        self.table.is_focused = state.active_panel == ActivePanel::PackageTable;
+        self.details.is_focused = state.active_panel == ActivePanel::Details;
+
         self.sidebar.draw(f, main_chunks[0], state);
         self.table.draw(f, main_chunks[1], state);
         self.details.draw(f, main_chunks[2], state);
@@ -176,26 +180,39 @@ impl AppLayout {
                     ("Up/Down", "select"),
                 ],
             }
-        } else if !state.search_query.is_empty() {
-            vec![
-                ("j/k", "navigate"),
-                ("i", "install"),
-                ("r", "remove"),
-                ("Tab", "switch scope"),
-                ("/", "edit filter"),
-                ("Esc", "clear filter"),
-                ("q", "quit"),
-            ]
         } else {
-            vec![
-                ("j/k", "navigate"),
-                ("i", "install"),
-                ("r", "remove"),
-                ("Tab", "switch scope"),
-                ("/", "search"),
-                ("Space", "select"),
-                ("q", "quit"),
-            ]
+            match state.active_panel {
+                ActivePanel::Sidebar => vec![
+                    ("1-4 / h/l", "switch layout"),
+                    ("j/k", "select category"),
+                    ("Enter/Space", "filter"),
+                    ("/", "search"),
+                    ("q", "quit"),
+                ],
+                ActivePanel::PackageTable => vec![
+                    ("1-4 / h/l", "switch layout"),
+                    ("j/k", "navigate"),
+                    ("i", "install"),
+                    ("r", "remove"),
+                    ("Tab", "scope"),
+                    ("/", "search"),
+                    ("Space", "select"),
+                    ("q", "quit"),
+                ],
+                ActivePanel::Details => vec![
+                    ("1-4 / h/l", "switch layout"),
+                    ("[ / ]", "switch tab"),
+                    ("j/k", "scroll info"),
+                    ("/", "search"),
+                    ("q", "quit"),
+                ],
+                ActivePanel::Logs => vec![
+                    ("1-4 / h/l", "switch layout"),
+                    ("j/k", "scroll logs"),
+                    ("/", "search"),
+                    ("q", "quit"),
+                ],
+            }
         };
 
         let mut footer_spans = Vec::new();
