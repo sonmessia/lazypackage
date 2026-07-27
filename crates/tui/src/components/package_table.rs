@@ -6,7 +6,7 @@ use lazypackage_core::action::Action;
 use lazypackage_core::domain::PackageStatus;
 use ratatui::{
     layout::{Constraint, Rect},
-    style::{Style, Stylize},
+    style::Style,
     widgets::{Block, Borders, Cell, Row, Table, TableState},
     Frame,
 };
@@ -46,21 +46,27 @@ impl Component for PackageTable {
         };
 
         let header = Row::new(vec!["Sel", "St", "Name", "Version", "Repo", "Size"])
-            .style(Style::default().bold());
+            .style(Style::default().fg(Theme::ACCENT).add_modifier(ratatui::style::Modifier::BOLD));
 
-        let rows: Vec<Row> = state
-            .packages
+        let filtered = state.filtered_packages();
+        let rows: Vec<Row> = filtered
             .iter()
             .map(|p| {
-                let selected = if state.selected_packages.contains(&p.id) {
-                    "[x]"
+                let is_checked = state.selected_packages.contains(&p.id);
+                let selected_cell = if is_checked {
+                    Cell::from("[✓]").style(
+                        Style::default()
+                            .fg(Theme::SUCCESS)
+                            .add_modifier(ratatui::style::Modifier::BOLD),
+                    )
                 } else {
-                    "[ ]"
+                    Cell::from("[ ]").style(Style::default().fg(Theme::MUTED))
                 };
+
                 let (st, color) = match p.status() {
                     PackageStatus::Installed => ("●", Theme::INSTALLED),
                     PackageStatus::UpgradeAvailable => ("▲", Theme::UPGRADABLE),
-                    PackageStatus::NotInstalled => ("○", Theme::DISABLED),
+                    PackageStatus::NotInstalled => ("○", Theme::MUTED),
                 };
 
                 let name = p.id.name.clone();
@@ -74,15 +80,28 @@ impl Component for PackageTable {
                 let size = p.size_bytes.map(|s| s.to_string()).unwrap_or_default();
 
                 Row::new(vec![
-                    Cell::from(selected),
+                    selected_cell,
                     Cell::from(st).style(Style::default().fg(color)),
-                    Cell::from(name),
-                    Cell::from(version),
-                    Cell::from(repo),
-                    Cell::from(size),
+                    Cell::from(name).style(Style::default().add_modifier(ratatui::style::Modifier::BOLD)),
+                    Cell::from(version).style(Style::default().fg(Theme::SUCCESS)),
+                    Cell::from(repo).style(Style::default().fg(Theme::SECONDARY)),
+                    Cell::from(size).style(Style::default().fg(Theme::TEXT_MUTED)),
                 ])
             })
             .collect();
+
+        let scope_name = match state.search_scope {
+            lazypackage_core::domain::SearchScope::Local => "Local",
+            lazypackage_core::domain::SearchScope::Dnf => "DNF Remote",
+        };
+
+        let total = state.active_packages().len();
+
+        let title_text = if state.search_query.is_empty() {
+            format!(" 📦 Packages [{}] ({}) ", scope_name, total)
+        } else {
+            format!(" 📦 Packages [{}] ({}/{}) ", scope_name, filtered.len(), total)
+        };
 
         let table = Table::new(
             rows,
@@ -99,11 +118,41 @@ impl Component for PackageTable {
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title("Packages")
+                .title(ratatui::text::Span::styled(
+                    title_text,
+                    Style::default().fg(Theme::ACCENT).add_modifier(ratatui::style::Modifier::BOLD),
+                ))
                 .border_style(Style::default().fg(border_color)),
         )
-        .highlight_style(Style::default().bg(Theme::BORDER_UNFOCUSED).fg(Theme::TEXT));
+        .highlight_symbol("▶ ")
+        .highlight_style(
+            Style::default()
+                .bg(Theme::SELECTION_BG)
+                .fg(Theme::SELECTION_FG)
+                .add_modifier(ratatui::style::Modifier::BOLD),
+        );
 
         f.render_stateful_widget(table, area, &mut self.state);
+
+        let scrollbar = ratatui::widgets::Scrollbar::new(
+            ratatui::widgets::ScrollbarOrientation::VerticalRight,
+        )
+        .begin_symbol(Some("▲"))
+        .end_symbol(Some("▼"))
+        .track_symbol(Some("│"))
+        .thumb_symbol("█")
+        .style(Style::default().fg(Theme::ACCENT));
+
+        let mut scrollbar_state = ratatui::widgets::ScrollbarState::new(filtered.len().saturating_sub(1))
+            .position(state.selected_package_index.unwrap_or(0));
+
+        f.render_stateful_widget(
+            scrollbar,
+            area.inner(&ratatui::layout::Margin {
+                vertical: 1,
+                horizontal: 0,
+            }),
+            &mut scrollbar_state,
+        );
     }
 }

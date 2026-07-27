@@ -16,6 +16,18 @@ pub enum BackendKind {
     // Snap,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SearchScope {
+    Local,
+    Dnf,
+}
+
+impl Default for SearchScope {
+    fn default() -> Self {
+        Self::Local
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Package {
     pub id: PackageId,

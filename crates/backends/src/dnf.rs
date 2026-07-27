@@ -20,7 +20,7 @@ impl Dnf {
 impl PackageSource for Dnf {
     async fn list_installed(&self) -> Result<Vec<Package>> {
         let mut cmd = Command::new("dnf");
-        cmd.arg("list").arg("installed").arg("-q");
+        cmd.arg("list").arg("--installed").arg("-q");
 
         let output = crate::process::run_command(cmd).await?;
         if !output.status.success() {
@@ -70,22 +70,34 @@ impl PackageSource for Dnf {
         let mut packages = Vec::new();
 
         for line in stdout.lines() {
-            if line.contains("Matched:")
-                || line.contains("Name Exactly Matched:")
-                || line.contains("Name & Summary Matched:")
+            let trimmed = line.trim();
+            if trimmed.is_empty()
+                || trimmed.starts_with("Matched")
+                || trimmed.starts_with("Name Exactly Matched:")
+                || trimmed.starts_with("Name & Summary Matched:")
+                || trimmed.starts_with("Installed Packages")
             {
                 continue;
             }
 
-            if let Some((name_arch, summary)) = line.split_once(':') {
-                let name = name_arch
-                    .split('.')
-                    .next()
-                    .unwrap_or(name_arch.trim())
-                    .trim()
-                    .to_string();
-                let summary = summary.trim().to_string();
+            let (name_arch, summary) = if let Some((n, s)) = trimmed.split_once('\t') {
+                (n.trim(), s.trim())
+            } else if let Some((n, s)) = trimmed.split_once(':') {
+                (n.trim(), s.trim())
+            } else if let Some((n, s)) = trimmed.split_once("  ") {
+                (n.trim(), s.trim())
+            } else {
+                continue;
+            };
 
+            let name = name_arch
+                .split('.')
+                .next()
+                .unwrap_or(name_arch)
+                .trim()
+                .to_string();
+
+            if !name.is_empty() {
                 packages.push(Package {
                     id: PackageId {
                         name,
@@ -95,7 +107,7 @@ impl PackageSource for Dnf {
                     available_version: None,
                     size_bytes: None,
                     repo: None,
-                    summary,
+                    summary: summary.to_string(),
                 });
             }
         }

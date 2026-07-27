@@ -5,7 +5,11 @@ use crossterm::event::KeyEvent;
 pub enum Action {
     KeyPressed(KeyEvent),
     SearchChanged(String),
+    ToggleSearchScope,
+    SetSearchScope(crate::domain::SearchScope),
+    ExecuteSearch,
     BackendResult(BackendKind, Result<Vec<Package>, String>),
+    SearchResult(BackendKind, Result<Vec<Package>, String>),
     InstallRequested(PackageId),
     RemoveRequested(PackageId),
     UpgradeRequested(PackageId),

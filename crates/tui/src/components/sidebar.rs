@@ -5,7 +5,7 @@ use crossterm::event::{KeyCode, KeyEvent};
 use lazypackage_core::action::Action;
 use ratatui::{
     layout::Rect,
-    style::{Style, Stylize},
+    style::Style,
     widgets::{Block, Borders, List, ListItem, ListState},
     Frame,
 };
@@ -75,7 +75,15 @@ impl Component for Sidebar {
         let items: Vec<ListItem> = self
             .categories
             .iter()
-            .map(|c| ListItem::new(c.as_str()))
+            .map(|c| {
+                let icon = match c.as_str() {
+                    "All" => "🌐",
+                    "Installed" => "📦",
+                    "Upgradable" => "🚀",
+                    _ => "📁",
+                };
+                ListItem::new(format!(" {} {}", icon, c))
+            })
             .collect();
 
         let border_color = if self.is_focused {
@@ -88,11 +96,41 @@ impl Component for Sidebar {
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .title("Sidebar")
+                    .title(ratatui::text::Span::styled(
+                        " 📁 Categories ",
+                        Style::default().fg(Theme::ACCENT).add_modifier(ratatui::style::Modifier::BOLD),
+                    ))
                     .border_style(Style::default().fg(border_color)),
             )
-            .highlight_style(Style::default().fg(Theme::ACCENT).bold());
+            .highlight_symbol("▶ ")
+            .highlight_style(
+                Style::default()
+                    .bg(Theme::SELECTION_BG)
+                    .fg(Theme::SELECTION_FG)
+                    .add_modifier(ratatui::style::Modifier::BOLD),
+            );
 
         f.render_stateful_widget(list, area, &mut self.state);
+
+        let scrollbar = ratatui::widgets::Scrollbar::new(
+            ratatui::widgets::ScrollbarOrientation::VerticalRight,
+        )
+        .begin_symbol(Some("▲"))
+        .end_symbol(Some("▼"))
+        .track_symbol(Some("│"))
+        .thumb_symbol("█")
+        .style(Style::default().fg(Theme::ACCENT));
+
+        let mut scrollbar_state = ratatui::widgets::ScrollbarState::new(self.categories.len().saturating_sub(1))
+            .position(self.state.selected().unwrap_or(0));
+
+        f.render_stateful_widget(
+            scrollbar,
+            area.inner(&ratatui::layout::Margin {
+                vertical: 1,
+                horizontal: 0,
+            }),
+            &mut scrollbar_state,
+        );
     }
 }

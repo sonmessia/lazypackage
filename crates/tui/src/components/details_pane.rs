@@ -5,7 +5,7 @@ use crossterm::event::KeyEvent;
 use lazypackage_core::action::Action;
 use ratatui::{
     layout::Rect,
-    style::{Style, Stylize},
+    style::Style,
     widgets::{Block, Borders, Paragraph, Tabs},
     Frame,
 };
@@ -38,15 +38,23 @@ impl Component for DetailsPane {
             Theme::BORDER_UNFOCUSED
         };
 
-        let titles = vec!["Info", "Dependencies", "Files"];
+        let titles = vec![" ℹ Info ", " 🔗 Dependencies ", " 📄 Files "];
         let tabs = Tabs::new(titles)
             .select(self.active_tab)
-            .style(Style::default().fg(Theme::TEXT))
-            .highlight_style(Style::default().fg(Theme::ACCENT).bold())
+            .style(Style::default().fg(Theme::TEXT_MUTED))
+            .highlight_style(
+                Style::default()
+                    .fg(Theme::SELECTION_FG)
+                    .bg(Theme::SELECTION_BG)
+                    .add_modifier(ratatui::style::Modifier::BOLD),
+            )
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .title("Details")
+                    .title(ratatui::text::Span::styled(
+                        " ℹ Package Details ",
+                        Style::default().fg(Theme::ACCENT).add_modifier(ratatui::style::Modifier::BOLD),
+                    ))
                     .border_style(Style::default().fg(border_color)),
             );
 
@@ -60,25 +68,61 @@ impl Component for DetailsPane {
 
         f.render_widget(tabs, chunks[0]);
 
-        let text = if let Some(idx) = state.selected_package_index {
-            if let Some(p) = state.packages.get(idx) {
-                format!(
-                    "Name: {}\nVersion: {:?}\nSummary: {}\nRepo: {:?}",
-                    p.id.name,
-                    p.installed_version
-                        .as_deref()
-                        .or(p.available_version.as_deref()),
-                    p.summary,
-                    p.repo
-                )
+        let lines = if let Some(p) = state.selected_package() {
+            let (st_str, st_color) = match p.status() {
+                lazypackage_core::domain::PackageStatus::Installed => ("● Installed", Theme::INSTALLED),
+                lazypackage_core::domain::PackageStatus::UpgradeAvailable => ("▲ Upgrade Available", Theme::UPGRADABLE),
+                lazypackage_core::domain::PackageStatus::NotInstalled => ("○ Not Installed", Theme::MUTED),
+            };
+
+            let ver = p
+                .installed_version
+                .as_deref()
+                .or(p.available_version.as_deref())
+                .unwrap_or("N/A");
+
+            let repo = p.repo.as_deref().unwrap_or("N/A");
+
+            let summary = if p.summary.is_empty() {
+                "N/A"
             } else {
-                "No package selected".to_string()
-            }
+                &p.summary
+            };
+
+            vec![
+                ratatui::text::Line::from(vec![
+                    ratatui::text::Span::styled("Name:    ", Style::default().fg(Theme::ACCENT).add_modifier(ratatui::style::Modifier::BOLD)),
+                    ratatui::text::Span::styled(&p.id.name, Style::default().fg(Theme::TEXT).add_modifier(ratatui::style::Modifier::BOLD)),
+                ]),
+                ratatui::text::Line::from(vec![
+                    ratatui::text::Span::styled("Status:  ", Style::default().fg(Theme::ACCENT).add_modifier(ratatui::style::Modifier::BOLD)),
+                    ratatui::text::Span::styled(st_str, Style::default().fg(st_color).add_modifier(ratatui::style::Modifier::BOLD)),
+                ]),
+                ratatui::text::Line::from(vec![
+                    ratatui::text::Span::styled("Version: ", Style::default().fg(Theme::ACCENT).add_modifier(ratatui::style::Modifier::BOLD)),
+                    ratatui::text::Span::styled(ver, Style::default().fg(Theme::SUCCESS)),
+                ]),
+                ratatui::text::Line::from(vec![
+                    ratatui::text::Span::styled("Backend: ", Style::default().fg(Theme::ACCENT).add_modifier(ratatui::style::Modifier::BOLD)),
+                    ratatui::text::Span::styled(format!("{:?}", p.id.backend), Style::default().fg(Theme::WARNING)),
+                ]),
+                ratatui::text::Line::from(vec![
+                    ratatui::text::Span::styled("Repo:    ", Style::default().fg(Theme::ACCENT).add_modifier(ratatui::style::Modifier::BOLD)),
+                    ratatui::text::Span::styled(repo, Style::default().fg(Theme::SECONDARY)),
+                ]),
+                ratatui::text::Line::from(vec![
+                    ratatui::text::Span::styled("Summary: ", Style::default().fg(Theme::ACCENT).add_modifier(ratatui::style::Modifier::BOLD)),
+                    ratatui::text::Span::styled(summary, Style::default().fg(Theme::TEXT)),
+                ]),
+            ]
         } else {
-            "No package selected".to_string()
+            vec![ratatui::text::Line::from(ratatui::text::Span::styled(
+                "No package selected",
+                Style::default().fg(Theme::MUTED),
+            ))]
         };
 
-        let content = Paragraph::new(text).block(
+        let content = Paragraph::new(lines).block(
             Block::default()
                 .borders(Borders::BOTTOM | Borders::LEFT | Borders::RIGHT)
                 .border_style(Style::default().fg(border_color)),

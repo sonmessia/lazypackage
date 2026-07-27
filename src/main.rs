@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use crossterm::{
-    event::{self, Event, KeyCode},
+    event::{self, Event},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -8,7 +8,7 @@ use lazypackage_backends::dnf::Dnf;
 use lazypackage_backends::privilege::SudoEscalator;
 use lazypackage_core::action::{Action, BackendOp, Command};
 use lazypackage_core::domain::BackendKind;
-use lazypackage_core::traits::{Installer, PackageSource, PrivilegeEscalator};
+use lazypackage_core::traits::{Installer, PackageSource};
 use lazypackage_tui::{update, AppLayout, AppState};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::sync::Arc;
@@ -159,7 +159,7 @@ async fn main() -> Result<()> {
                                         match dnf_cmd.search(&query).await {
                                             Ok(packages) => {
                                                 let _ = tx_cmd
-                                                    .send(Action::BackendResult(
+                                                    .send(Action::SearchResult(
                                                         BackendKind::Dnf,
                                                         Ok(packages),
                                                     ))
@@ -167,7 +167,7 @@ async fn main() -> Result<()> {
                                             }
                                             Err(e) => {
                                                 let _ = tx_cmd
-                                                    .send(Action::BackendResult(
+                                                    .send(Action::SearchResult(
                                                         BackendKind::Dnf,
                                                         Err(e.to_string()),
                                                     ))
