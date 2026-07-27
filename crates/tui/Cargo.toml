@@ -1,0 +1,11 @@
+[package]
+name = "lazypackage-tui"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+crossterm = "0.28"
+lazypackage-core = { path = "../core" }
+ratatui = "0.26"

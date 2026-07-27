@@ -1,0 +1,11 @@
+[package]
+name = "lazypackage-core"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+async-trait = "0.1"
+crossterm = "0.28"  # Needed for KeyEvent in Action
+thiserror = "1"

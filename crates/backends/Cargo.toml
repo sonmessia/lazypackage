@@ -1,0 +1,12 @@
+[package]
+name = "lazypackage-backends"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+async-trait = "0.1"
+lazypackage-core = { path = "../core" }
+thiserror = "1"
+tokio = { version = "1", features = ["process", "sync", "time"] }

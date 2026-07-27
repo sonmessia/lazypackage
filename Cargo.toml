@@ -1,0 +1,28 @@
+[package]
+name = "lazypackage"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[workspace]
+resolver = "2"
+members = ["crates/backends", "crates/core", "crates/tui"]
+
+[workspace.package]
+version = "0.1.0"
+authors = ["Chicken_Yi"]
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+anyhow = "1"
+crossterm = "0.28"
+dirs = "6"
+lazypackage-backends = { path = "crates/backends" }
+lazypackage-core = { path = "crates/core" }
+lazypackage-tui = { path = "crates/tui" }
+ratatui = "0.26"
+serde = { version = "1", features = ["derive"] }
+tokio = { version = "1", features = ["full"] }
+toml = "0.8"
