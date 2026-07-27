@@ -1,6 +1,6 @@
 use crate::components::{
-    details_pane::DetailsPane, log_panel::LogPanel, package_table::PackageTable, sidebar::Sidebar,
-    Component,
+    details_pane::DetailsPane, help_popup::HelpPopup, log_panel::LogPanel,
+    package_table::PackageTable, sidebar::Sidebar, Component,
 };
 use crate::state::AppState;
 use crate::theme::Theme;
@@ -18,6 +18,7 @@ pub struct AppLayout {
     pub table: PackageTable,
     pub details: DetailsPane,
     pub log_panel: LogPanel,
+    pub help_popup: HelpPopup,
 }
 
 impl Default for AppLayout {
@@ -33,6 +34,7 @@ impl AppLayout {
             table: PackageTable::new(),
             details: DetailsPane::new(),
             log_panel: LogPanel::new(),
+            help_popup: HelpPopup::new(),
         }
     }
 
@@ -119,7 +121,7 @@ impl AppLayout {
             ));
         } else {
             header_spans.push(Span::styled(
-                " (Press / to search, Tab to switch scope)",
+                " (Press / to search, ? for help)",
                 Style::default().fg(Theme::TEXT_MUTED),
             ));
         }
@@ -186,7 +188,7 @@ impl AppLayout {
                     ("1-4 / h/l", "switch layout"),
                     ("j/k", "select category"),
                     ("Enter/Space", "filter"),
-                    ("/", "search"),
+                    ("?", "help"),
                     ("q", "quit"),
                 ],
                 ActivePanel::PackageTable => vec![
@@ -194,22 +196,23 @@ impl AppLayout {
                     ("j/k", "navigate"),
                     ("i", "install"),
                     ("r", "remove"),
-                    ("Tab", "scope"),
-                    ("/", "search"),
                     ("Space", "select"),
+                    ("a", "select all"),
+                    ("?", "help"),
                     ("q", "quit"),
                 ],
                 ActivePanel::Details => vec![
                     ("1-4 / h/l", "switch layout"),
                     ("[ / ]", "switch tab"),
                     ("j/k", "scroll info"),
-                    ("/", "search"),
+                    ("?", "help"),
                     ("q", "quit"),
                 ],
                 ActivePanel::Logs => vec![
                     ("1-4 / h/l", "switch layout"),
                     ("j/k", "scroll logs"),
-                    ("/", "search"),
+                    ("c", "clear"),
+                    ("?", "help"),
                     ("q", "quit"),
                 ],
             }
@@ -234,5 +237,9 @@ impl AppLayout {
 
         let footer = Paragraph::new(Line::from(footer_spans));
         f.render_widget(footer, chunks[3]);
+
+        if state.show_help_popup {
+            self.help_popup.draw(f, f.size(), state);
+        }
     }
 }

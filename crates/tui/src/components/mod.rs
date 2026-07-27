@@ -1,4 +1,5 @@
 pub mod details_pane;
+pub mod help_popup;
 pub mod log_panel;
 pub mod package_table;
 pub mod sidebar;

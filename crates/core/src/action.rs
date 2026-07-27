@@ -10,6 +10,7 @@ pub enum Action {
     SetActivePanel(crate::domain::ActivePanel),
     NextPanel,
     PrevPanel,
+    ToggleHelpPopup,
     ExecuteSearch,
     BackendResult(BackendKind, Result<Vec<Package>, String>),
     SearchResult(BackendKind, Result<Vec<Package>, String>),

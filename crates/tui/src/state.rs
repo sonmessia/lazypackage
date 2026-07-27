@@ -18,6 +18,7 @@ pub struct AppState {
     pub error_message: Option<String>,
     pub is_loading: bool,
     pub current_category: String,
+    pub show_help_popup: bool,
 }
 
 impl Default for AppState {
@@ -39,6 +40,7 @@ impl Default for AppState {
             error_message: None,
             is_loading: false,
             current_category: "All".to_string(),
+            show_help_popup: false,
         }
     }
 }
