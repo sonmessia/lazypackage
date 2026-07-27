@@ -1,4 +1,3 @@
-pub mod cache;
-pub mod dnf;
-pub mod privilege;
-pub mod process;
+// Empty lazypackage-backends crate.
+// Infrastructure adapters (AptBackend, DnfBackend, PacmanBackend, etc.)
+// will be implemented here.

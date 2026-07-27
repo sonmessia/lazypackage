@@ -18,11 +18,8 @@ license = "MIT"
 [dependencies]
 anyhow = "1"
 crossterm = "0.28"
-dirs = "6"
 lazypackage-backends = { path = "crates/backends" }
 lazypackage-core = { path = "crates/core" }
 lazypackage-tui = { path = "crates/tui" }
 ratatui = "0.26"
-serde = { version = "1", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
-toml = "0.8"

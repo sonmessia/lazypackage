@@ -5,7 +5,14 @@ authors.workspace = true
 edition.workspace = true
 license.workspace = true
 
+# --- Dependency Policy ---
+# This crate is the pure Domain/Core layer.
+# It MUST remain free of any I/O, UI, or runtime-specific dependencies.
+# Only `thiserror` is allowed as it is a zero-cost derive macro for std::error::Error.
 [dependencies]
-async-trait = "0.1"
-crossterm = "0.28"  # Needed for KeyEvent in Action
-thiserror = "1"
+thiserror = "2"
+
+[dev-dependencies]
+# tokio is used only as an executor for async unit tests inside this crate.
+# It is NOT a production dependency of the core layer.
+tokio = { version = "1", features = ["macros", "rt"] }

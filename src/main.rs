@@ -1,23 +1,83 @@
 use anyhow::{Context, Result};
 use crossterm::{
-    event::{self, Event, KeyCode},
+    event::{self, Event},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use lazypackage_backends::dnf::Dnf;
-use lazypackage_backends::privilege::SudoEscalator;
-use lazypackage_core::action::{Action, BackendOp, Command};
-use lazypackage_core::domain::BackendKind;
-use lazypackage_core::traits::{Installer, PackageSource, PrivilegeEscalator};
+use lazypackage_core::action::{Action, Command};
 use lazypackage_tui::{update, AppLayout, AppState};
 use ratatui::{backend::CrosstermBackend, Terminal};
-use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
 
+// ============================================================================
+// Orchestration layer (TODO: implement)
+// ============================================================================
+//
+// This is the integration point between the TUI and the package-manager
+// backends. The functions below are called whenever `update()` emits a
+// `Command`. Fill them in to support each backend you want to expose.
+//
+// Suggested approach:
+//   - Detect which package managers are available at startup.
+//   - Store them as `Arc<dyn Installer + PackageSource>` values.
+//   - Route each `Command` to the correct backend instance.
+
+/// Bootstrap: send the initial list of installed packages into the TUI.
+///
+/// Called once at startup. Implementations should spawn an async task that
+/// calls `backend.list_installed()` and sends an
+/// `Action::InstalledPackagesLoaded(backend_kind, result)` back through `tx`.
+async fn load_initial_packages(_tx: mpsc::Sender<Action>) {
+    // TODO: detect available backends, call list_installed(), send result
+    todo!("implement initial package loading")
+}
+
+/// Dispatch a `Command` emitted by the TUI update function.
+///
+/// Implementations should match on the command variant and route it to the
+/// appropriate backend, then send the result back as an `Action`.
+async fn dispatch(cmd: Command, _tx: mpsc::Sender<Action>) {
+    match cmd {
+        Command::Quit => { /* handled in the event loop */ }
+        Command::RefreshInstalled { backend } => {
+            // TODO: call backend.list_installed() and send Action::InstalledPackagesLoaded
+            let _ = backend;
+            todo!("implement RefreshInstalled")
+        }
+        Command::SearchRemote { backend, query } => {
+            // TODO: call backend.search(&query) and send Action::SearchResult
+            let _ = (backend, query);
+            todo!("implement SearchRemote")
+        }
+        Command::Install { id } => {
+            // TODO: call backend.install(&id), then refresh installed list,
+            //       send Action::OperationResult on error
+            let _ = id;
+            todo!("implement Install")
+        }
+        Command::Remove { id } => {
+            // TODO: call backend.remove(&id), then refresh installed list,
+            //       send Action::OperationResult on error
+            let _ = id;
+            todo!("implement Remove")
+        }
+        Command::Upgrade { id } => {
+            // TODO: call backend.upgrade(&id), then refresh installed list,
+            //       send Action::OperationResult on error
+            let _ = id;
+            todo!("implement Upgrade")
+        }
+    }
+}
+
+// ============================================================================
+// Entry point
+// ============================================================================
+
 #[tokio::main]
 async fn main() -> Result<()> {
-    // 1. Setup panic hook to restore terminal
+    // 1. Restore terminal on panic
     let original_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |panic_info| {
         let _ = disable_raw_mode();
@@ -32,36 +92,17 @@ async fn main() -> Result<()> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    // 3. Application State & Layout
+    // 3. Application state & layout
     let mut app_state = AppState::new();
     let mut layout = AppLayout::new();
 
-    // 4. Communication channel
+    // 4. Action channel (TUI → orchestration → TUI)
     let (tx, mut rx) = mpsc::channel::<Action>(32);
 
-    // 5. Initialize backends (Dnf for MVP)
-    let escalator = Arc::new(SudoEscalator);
-    let dnf = Arc::new(Dnf::new(escalator));
+    // 5. Load initial data
+    load_initial_packages(tx.clone()).await;
 
-    // Load initial installed packages
-    let tx_clone = tx.clone();
-    let dnf_clone = dnf.clone();
-    tokio::spawn(async move {
-        match dnf_clone.list_installed().await {
-            Ok(packages) => {
-                let _ = tx_clone
-                    .send(Action::BackendResult(BackendKind::Dnf, Ok(packages)))
-                    .await;
-            }
-            Err(e) => {
-                let _ = tx_clone
-                    .send(Action::BackendResult(BackendKind::Dnf, Err(e.to_string())))
-                    .await;
-            }
-        }
-    });
-
-    // Event loop task for crossterm
+    // 6. Crossterm event pump
     let tx_input = tx.clone();
     tokio::spawn(async move {
         loop {
@@ -75,7 +116,7 @@ async fn main() -> Result<()> {
         }
     });
 
-    // 6. Main Event Loop
+    // 7. Main event loop
     let mut should_quit = false;
     while !should_quit {
         terminal.draw(|f| {
@@ -86,105 +127,19 @@ async fn main() -> Result<()> {
             let commands = update(&mut app_state, action);
 
             for command in commands {
-                match command {
-                    Command::Quit => {
-                        should_quit = true;
-                    }
-                    Command::RunBackend { backend, op } => {
-                        if backend == BackendKind::Dnf {
-                            let tx_cmd = tx.clone();
-                            let dnf_cmd = dnf.clone();
-                            tokio::spawn(async move {
-                                match op {
-                                    BackendOp::Install(id) => {
-                                        if let Err(e) = dnf_cmd.install(&id).await {
-                                            let _ = tx_cmd
-                                                .send(Action::BackendResult(
-                                                    BackendKind::Dnf,
-                                                    Err(e.to_string()),
-                                                ))
-                                                .await;
-                                        } else {
-                                            // Refresh list on success
-                                            if let Ok(packages) = dnf_cmd.list_installed().await {
-                                                let _ = tx_cmd
-                                                    .send(Action::BackendResult(
-                                                        BackendKind::Dnf,
-                                                        Ok(packages),
-                                                    ))
-                                                    .await;
-                                            }
-                                        }
-                                    }
-                                    BackendOp::Remove(id) => {
-                                        if let Err(e) = dnf_cmd.remove(&id).await {
-                                            let _ = tx_cmd
-                                                .send(Action::BackendResult(
-                                                    BackendKind::Dnf,
-                                                    Err(e.to_string()),
-                                                ))
-                                                .await;
-                                        } else {
-                                            if let Ok(packages) = dnf_cmd.list_installed().await {
-                                                let _ = tx_cmd
-                                                    .send(Action::BackendResult(
-                                                        BackendKind::Dnf,
-                                                        Ok(packages),
-                                                    ))
-                                                    .await;
-                                            }
-                                        }
-                                    }
-                                    BackendOp::ListInstalled => {
-                                        match dnf_cmd.list_installed().await {
-                                            Ok(packages) => {
-                                                let _ = tx_cmd
-                                                    .send(Action::BackendResult(
-                                                        BackendKind::Dnf,
-                                                        Ok(packages),
-                                                    ))
-                                                    .await;
-                                            }
-                                            Err(e) => {
-                                                let _ = tx_cmd
-                                                    .send(Action::BackendResult(
-                                                        BackendKind::Dnf,
-                                                        Err(e.to_string()),
-                                                    ))
-                                                    .await;
-                                            }
-                                        }
-                                    }
-                                    BackendOp::Search(query) => {
-                                        match dnf_cmd.search(&query).await {
-                                            Ok(packages) => {
-                                                let _ = tx_cmd
-                                                    .send(Action::BackendResult(
-                                                        BackendKind::Dnf,
-                                                        Ok(packages),
-                                                    ))
-                                                    .await;
-                                            }
-                                            Err(e) => {
-                                                let _ = tx_cmd
-                                                    .send(Action::BackendResult(
-                                                        BackendKind::Dnf,
-                                                        Err(e.to_string()),
-                                                    ))
-                                                    .await;
-                                            }
-                                        }
-                                    }
-                                }
-                            });
-                        }
-                    }
+                if command == Command::Quit {
+                    should_quit = true;
+                } else {
+                    let tx_cmd = tx.clone();
+                    tokio::spawn(async move {
+                        dispatch(command, tx_cmd).await;
+                    });
                 }
             }
         }
     }
 
-    // 7. Cleanup terminal
+    // 8. Cleanup terminal
     disable_raw_mode()?;
     execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
     terminal.show_cursor()?;
