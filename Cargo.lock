@@ -45,6 +45,7 @@ name = "lazypackage-backends"
 version = "0.1.0"
 dependencies = [
  "lazypackage-core",
+ "tokio",
 ]
 
 [[package]]

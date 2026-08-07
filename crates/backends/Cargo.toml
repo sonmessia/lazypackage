@@ -7,3 +7,4 @@ license.workspace = true
 
 [dependencies]
 lazypackage-core = { path = "../core" }
+tokio = { version = "1", features = ["process", "macros", "rt-multi-thread"] }
