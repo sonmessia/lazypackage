@@ -20,3 +20,4 @@ lazypackage-backends = { path = "crates/backends" }
 lazypackage-core = { path = "crates/core" }
 lazypackage-tui = { path = "crates/tui" }
 tokio = { version = "1", features = ["full"] }
+crossterm = { version = "0.28" }

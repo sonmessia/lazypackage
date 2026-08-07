@@ -6,4 +6,9 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-# Dependencies can be added here as needed, typically ratatui and crossterm for a TUI crate
+lazypackage-core = { path = "../core" }
+lazypackage-backends = { path = "../backends" }
+ratatui = "0.29"
+crossterm = { version = "0.28", features = ["event-stream"] }
+tokio = { version = "1", features = ["full"] }
+tokio-stream = "0.1"

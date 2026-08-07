@@ -127,35 +127,81 @@ impl DnfBackend {
 
     /// Runs a `dnf` command **with `sudo`** and returns the captured stdout.
     ///
-    /// Used for all mutating operations (install, remove, upgrade, …).
+    /// If `sudo_password` is `Some`, it is piped to `sudo -S` via stdin so
+    /// that non-interactive invocations (TUI, CI) can authenticate without
+    /// a controlling terminal.
+    ///
+    /// Pass `None` when the process already has cached sudo credentials or
+    /// is running as root.
     ///
     /// # Errors
     ///
-    /// - [`PackageError::PrivilegeError`] if `sudo` is unavailable.
+    /// - [`PackageError::PrivilegeError`] if `sudo` is unavailable or the
+    ///   password is incorrect.
     /// - [`PackageError::BackendError`] for other failures.
-    async fn run_dnf_privileged(&self, args: &[&str]) -> Result<String, PackageError> {
-        let mut full_args = vec!["dnf"];
+    pub async fn run_dnf_privileged(
+        &self,
+        args: &[&str],
+        sudo_password: Option<&str>,
+    ) -> Result<String, PackageError> {
+        let mut full_args: Vec<&str> = if sudo_password.is_some() {
+            // -S: read password from stdin  -p "": suppress the password prompt
+            vec!["-S", "-p", "", "dnf"]
+        } else {
+            vec!["dnf"]
+        };
         full_args.extend_from_slice(args);
 
-        let output = Command::new("sudo")
-            .args(&full_args)
+        let mut cmd = Command::new("sudo");
+        cmd.args(&full_args)
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .output()
-            .await
+            .stderr(Stdio::piped());
+
+        if sudo_password.is_some() {
+            cmd.stdin(Stdio::piped());
+        } else {
+            cmd.stdin(Stdio::null());
+        }
+
+        let mut child = cmd
+            .spawn()
             .map_err(|e| PackageError::PrivilegeError(format!("failed to spawn sudo: {e}")))?;
+
+        // Write the password followed by a newline to stdin.
+        if let Some(pw) = sudo_password {
+            use tokio::io::AsyncWriteExt as _;
+            if let Some(stdin) = child.stdin.take() {
+                let mut stdin = stdin;
+                stdin
+                    .write_all(format!("{pw}\n").as_bytes())
+                    .await
+                    .map_err(|e| {
+                        PackageError::PrivilegeError(format!("failed to write sudo password: {e}"))
+                    })?;
+                // Drop stdin to signal EOF to sudo.
+            }
+        }
+
+        let output = child
+            .wait_with_output()
+            .await
+            .map_err(|e| PackageError::PrivilegeError(format!("sudo wait failed: {e}")))?;
 
         if output.status.success() {
             String::from_utf8(output.stdout)
                 .map_err(|e| Self::backend_err(format!("dnf output is not valid UTF-8: {e}")))
         } else {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            // Detect common sudo / privilege failures.
             let msg = stderr.trim();
-            if msg.contains("sudo:")
-                || msg.contains("not allowed")
-                || msg.contains("incorrect password")
+            if msg.contains("incorrect password")
+                || msg.contains("Sorry, try again")
+                || msg.contains("Authentication failure")
             {
+                return Err(PackageError::PrivilegeError(
+                    "incorrect sudo password".to_owned(),
+                ));
+            }
+            if msg.contains("sudo:") || msg.contains("not allowed") {
                 return Err(PackageError::PrivilegeError(msg.to_owned()));
             }
             Err(Self::backend_err(format!(
@@ -163,6 +209,50 @@ impl DnfBackend {
                 output.status, msg
             )))
         }
+    }
+    /// Lists **all** packages available in the configured repositories,
+    /// including those not currently installed.
+    ///
+    /// ## Strategy
+    ///
+    /// Two subprocesses run concurrently:
+    /// 1. `dnf repoquery --queryformat ... --available` — all repo packages.
+    /// 2. `dnf list --installed` — installed package names for status tagging.
+    ///
+    /// Packages that appear in the installed list receive
+    /// [`PackageStatus::Installed`]; all others receive
+    /// [`PackageStatus::NotInstalled`].
+    ///
+    /// # Performance note
+    ///
+    /// This can return tens of thousands of packages and may take several
+    /// seconds.  Call it from a background task so the UI remains responsive.
+    pub async fn list_all(&self) -> Result<Vec<Package>, PackageError> {
+        const FMT: &str = "%{name}\t%{version}-%{release}\t%{summary}\t%{reponame}\n";
+
+        let repoquery_args = [
+            "repoquery",
+            "--queryformat",
+            FMT,
+            "--color=never",
+            "--available",
+        ];
+        let list_args = ["list", "--installed", "--color=never"];
+
+        let (repoquery_result, installed_result) =
+            tokio::join!(self.run_dnf(&repoquery_args), self.run_dnf(&list_args));
+
+        let installed_names: std::collections::HashSet<String> = match installed_result {
+            Ok(stdout) => parse_dnf_list_installed(&stdout, BackendKind::Dnf)
+                .into_iter()
+                .map(|p| p.name)
+                .collect(),
+            Err(_) => std::collections::HashSet::new(),
+        };
+
+        let repoquery_stdout = repoquery_result.unwrap_or_default();
+        let packages = parse_dnf_repoquery(&repoquery_stdout, &installed_names, BackendKind::Dnf);
+        Ok(packages)
     }
 }
 
@@ -294,7 +384,7 @@ impl SystemPackageManager for DnfBackend {
                 ));
             }
 
-            let stdout = self.run_dnf_privileged(&["install", "-y", &name]).await?;
+            let stdout = self.run_dnf_privileged(&["install", "-y", &name], None).await?;
 
             // DNF prints "Nothing to do." when the package is already installed.
             if stdout.contains("Nothing to do") {
@@ -324,7 +414,7 @@ impl SystemPackageManager for DnfBackend {
                 ));
             }
 
-            self.run_dnf_privileged(&["remove", "-y", &name]).await?;
+            self.run_dnf_privileged(&["remove", "-y", &name], None).await?;
             Ok(())
         }
     }
@@ -343,7 +433,7 @@ impl SystemPackageManager for DnfBackend {
                 ));
             }
 
-            let stdout = self.run_dnf_privileged(&["upgrade", "-y", &name]).await?;
+            let stdout = self.run_dnf_privileged(&["upgrade", "-y", &name], None).await?;
 
             // If there is nothing to upgrade, DNF exits 0 and prints "Nothing to do."
             // This is not an error — we treat it as a successful no-op.
@@ -358,7 +448,7 @@ impl SystemPackageManager for DnfBackend {
         &self,
     ) -> impl std::future::Future<Output = Result<(), PackageError>> + Send + '_ {
         async move {
-            self.run_dnf_privileged(&["upgrade", "-y"]).await?;
+            self.run_dnf_privileged(&["upgrade", "-y"], None).await?;
             Ok(())
         }
     }
